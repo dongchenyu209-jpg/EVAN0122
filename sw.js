@@ -1,5 +1,5 @@
 // sw.js —— 让 Love Boat 可以安装、离线打开，并支持通知点击回到应用
-const CACHE = 'love-boat-v1';
+const CACHE = 'love-boat-v8';
 const CORE = [
   './',
   './index.html',
