@@ -2,13 +2,18 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="theme-color" content="#3b2547">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Love Boat">
 <title>Love Boat</title>
-<link rel="icon" type="image/x-icon" href="/favicon.ico">
-<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
-<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
-<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-<link rel="manifest" href="/site.webmanifest">
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -701,6 +706,9 @@ body.theme-pinkwhite .moyu-empty, body.theme-pinkwhite .moyu-hidden, body.theme-
 #homePage2 { overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
 #homePage2::-webkit-scrollbar { display:none; }
 body.phone-fit #fabExitFullscreen { display:none; }
+/* 旧版 Chrome 不认识 dvh 时，退回 vh，避免手机框被撑回 844px */
+body.fullscreen .phone { height:100vh; height:100dvh; }
+html { -webkit-text-size-adjust:100%; text-size-adjust:100%; }
 .p2-moyu-wrap { padding-bottom:10px; }
 @media (max-height:760px){
   .moyu-card { min-height:64px; padding:10px 14px 8px; }
@@ -1870,6 +1878,7 @@ body.fullscreen .fp-sub { border-radius:0; }
     <div class="emoji-panel" id="emojiPanel"></div>
 <div class="chat-footer">
   <div class="icon-btn" id="chatEmojiBtn"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8.5 14s1.5 2 3.5 2 3.5-2 3.5-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></div>
+  <div class="icon-btn" id="chatPollBtn" title="发送问卷"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></div>
   <input type="text" id="chatInput" placeholder="say something…">
   <div class="icon-btn" id="chatSend"><svg viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-2-6-8-2z"/></svg></div>
   <div class="icon-btn" id="chatReply" style="pointer-events:auto;"><svg viewBox="0 0 24 24"><path d="M9 17l-5-5 5-5"/><path d="M4 12h11a5 5 0 0 1 5 5v3"/></svg></div>
@@ -2199,7 +2208,23 @@ body.fullscreen .fp-sub { border-radius:0; }
 <script>
 const APP_VERSION = '2026.5.22 v2.6.7';
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('/sw.js').catch(err=>console.warn('SW register failed:',err));
+  navigator.serviceWorker.register('./sw.js').catch(err=>console.warn('SW register failed:',err));
+}
+/* ========== 安装为应用（PWA）========== */
+let _deferredInstall = null;
+window.addEventListener('beforeinstallprompt', e=>{ e.preventDefault(); _deferredInstall = e; });
+window.addEventListener('appinstalled', ()=>{ _deferredInstall = null; try{ showToast('已安装到桌面', 'success'); }catch(_){} });
+function isStandaloneApp(){
+  return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+}
+async function installApp(){
+  if(isStandaloneApp()){ alert('已经是安装后的应用啦'); return; }
+  if(_deferredInstall){
+    const ev = _deferredInstall; _deferredInstall = null;
+    try{ ev.prompt(); await ev.userChoice; }catch(err){}
+    return;
+  }
+  alert('Chrome：点右上角「⋮」→「安装应用」（或「添加到主屏幕」）。\n\n没有这个选项的话：请确认是用 https 网址打开的，刷新一次页面后再试。\n\niPhone / iPad：用 Safari 点底部分享按钮 →「添加到主屏幕」。');
 }
 const NETEASE_PROXY = 'https://netease-cloud-music-api-backup-flame.vercel.app';
 // 带 Cookie 调用网易云 API
@@ -2271,13 +2296,18 @@ function defaultState(){
   showBubbleTime: true, 
   proactive: {
     enabled: false,
-    minHours: 1,        // 距离上一条消息至少几小时
+    minMinutes: 30,     // 距离上一条消息至少几分钟
     maxHours: 3,        // 最多几小时
     quietStart: '23:00',// 禁发起始
     quietEnd: '07:00',  // 禁发结束
     minMsgs: 1,         // 主动发送条数
     maxMsgs: 2,
     lastTriggerAt: 0    // 上次主动触发时间
+  },
+  questionnaire: {
+    minMinutes: 1,
+    maxMinutes: 10,
+    pending: null       // {id, question, options, sentAt, dueAt}
   }
 },
 
@@ -2773,7 +2803,19 @@ function buildSettingHTML(){
   return `
     <div class="item">
       <label>API 设置</label>
-      <input type="text" id="api-url" placeholder="URL (例: https://api.openai.com/v1)" value="${active?escapeHTML(active.url):''}">
+      <div style="font-size:12px;opacity:.7;margin-bottom:8px;line-height:1.5;">可选用 OpenAI 兼容接口、DeepSeek 或 Google Gemini。点下方预设会自动填入地址。</div>
+      <div class="row-flex" style="margin-bottom:8px;flex-wrap:wrap;gap:6px;">
+        <button type="button" id="api-preset-openai" style="font-size:12px;padding:6px 10px;">OpenAI</button>
+        <button type="button" id="api-preset-deepseek" style="font-size:12px;padding:6px 10px;">DeepSeek</button>
+        <button type="button" id="api-preset-google" style="font-size:12px;padding:6px 10px;">Google Gemini</button>
+      </div>
+      <label style="margin-top:4px;font-size:12px;">接口类型</label>
+      <select id="api-provider" style="width:100%;margin-top:4px;">
+        <option value="openai" ${(active&&active.provider==='openai')||!active||!active.provider?'selected':''}>OpenAI 兼容（含 DeepSeek）</option>
+        <option value="deepseek" ${active&&active.provider==='deepseek'?'selected':''}>DeepSeek</option>
+        <option value="google" ${active&&active.provider==='google'?'selected':''}>Google Gemini</option>
+      </select>
+      <input type="text" id="api-url" placeholder="URL (例: https://api.deepseek.com/v1)" value="${active?escapeHTML(active.url):''}" style="margin-top:8px;">
       <input type="password" id="api-key" placeholder="API Key" value="${active?escapeHTML(active.key):''}" style="margin-top:8px;">
       <div class="row-flex" style="margin-top:8px;">
         <button id="api-fetch-models">获取模型</button>
@@ -2814,6 +2856,11 @@ function buildSettingHTML(){
     主动发消息、定时提醒等功能需要此功能才能在后台持续运行。
   </div>
 </div>
+    <div class="item">
+      <label>安装应用</label>
+      <button id="set-install">📲 安装到手机 / 桌面</button>
+      <div style="font-size:11px;opacity:.6;margin-top:6px;line-height:1.5;">装好后从桌面图标打开，就是没有浏览器地址栏的全屏 App，也可以断网打开。</div>
+    </div>
     <div class="item">
       <label>导出备份</label>
          <button id="set-export-full">全部导出</button>
@@ -2895,7 +2942,30 @@ function buildSettingHTML(){
   `;
 }
 
+function applyApiPreset(kind){
+  const urlEl=document.getElementById('api-url');
+  const provEl=document.getElementById('api-provider');
+  const modelEl=document.getElementById('api-model');
+  if(kind==='openai'){
+    urlEl.value='https://api.openai.com/v1';
+    provEl.value='openai';
+    modelEl.innerHTML='<option value="gpt-4o-mini">gpt-4o-mini</option><option value="gpt-4o">gpt-4o</option>';
+  } else if(kind==='deepseek'){
+    urlEl.value='https://api.deepseek.com/v1';
+    provEl.value='deepseek';
+    modelEl.innerHTML='<option value="deepseek-chat">deepseek-chat</option><option value="deepseek-reasoner">deepseek-reasoner</option>';
+  } else if(kind==='google'){
+    urlEl.value='https://generativelanguage.googleapis.com/v1beta';
+    provEl.value='google';
+    modelEl.innerHTML='<option value="gemini-2.0-flash">gemini-2.0-flash</option><option value="gemini-1.5-flash">gemini-1.5-flash</option><option value="gemini-1.5-pro">gemini-1.5-pro</option>';
+  }
+  showToast('已填入 '+kind+' 预设，请粘贴 Key 后保存','info',2800);
+}
+
 function bindSettingEvents(){
+  document.getElementById('api-preset-openai').addEventListener('click',()=>applyApiPreset('openai'));
+  document.getElementById('api-preset-deepseek').addEventListener('click',()=>applyApiPreset('deepseek'));
+  document.getElementById('api-preset-google').addEventListener('click',()=>applyApiPreset('google'));
   document.getElementById('api-fetch-models').addEventListener('click',fetchApiModels);
   document.getElementById('api-temp').addEventListener('input',e=>{
     document.getElementById('api-temp-val').textContent=e.target.value;
@@ -2903,6 +2973,7 @@ function bindSettingEvents(){
   document.getElementById('api-save').addEventListener('click',()=>{
     const a=state.api.configs.find(c=>c.id===state.api.activeId);
     if(!a){alert('请先另存为配置');return;}
+    a.provider=document.getElementById('api-provider').value;
     a.url=document.getElementById('api-url').value.trim();
     a.key=document.getElementById('api-key').value.trim();
     a.model=document.getElementById('api-model').value;
@@ -2919,6 +2990,7 @@ function bindSettingEvents(){
     if(!name||!name.trim())return;
     const cfg={
       id:uid(), name:name.trim(),
+      provider:document.getElementById('api-provider').value,
       url:document.getElementById('api-url').value.trim(),
       key:document.getElementById('api-key').value.trim(),
       model:document.getElementById('api-model').value,
@@ -2964,6 +3036,7 @@ function bindSettingEvents(){
   bindToggle('set-sound',on=>{state.soundEnabled=on;saveState();});
   document.getElementById('set-sound-test').addEventListener('click',()=>playSound());
 
+  document.getElementById('set-install').addEventListener('click',()=>installApp());
   document.getElementById('set-export-full').addEventListener('click',()=>{
     downloadJSON(state,'homescreen-full.json');
     // 用户手动备份后，重置计时器
@@ -3135,23 +3208,48 @@ async function updateStorageInfo(){
   el.innerHTML = `已用 <b>${fmt(usage)}</b> &nbsp;·&nbsp; 剩余 <b>${fmt(quota-usage)}</b> &nbsp;·&nbsp; 总共 <b>${fmt(quota)}</b>`;
 }
 
+function detectApiProvider(url, explicit){
+  if(explicit && explicit!=='openai') return explicit;
+  const u=(url||'').toLowerCase();
+  if(u.includes('generativelanguage.googleapis.com') || u.includes('googleapis.com/v1beta')) return 'google';
+  if(u.includes('api.deepseek.com')) return 'deepseek';
+  return explicit || 'openai';
+}
+
 async function fetchApiModels(){
   const url=document.getElementById('api-url').value.trim();
   const key=document.getElementById('api-key').value.trim();
+  const provider=detectApiProvider(url, document.getElementById('api-provider')?.value);
   if(!url||!key){alert('请填写 URL 与 Key');return;}
   try {
-    const res=await fetch(url.replace(/\/+$/,'')+'/models',{headers:{'Authorization':'Bearer '+key}});
-    if(!res.ok){
-      const errText = await res.text();
-      let detail = errText;
-      try {
-        const errJson = JSON.parse(errText);
-        detail = errJson.error?.message || errJson.message || errText;
-      } catch(e){}
-      throw new Error(`HTTP ${res.status}\n\n${detail}`);
+    let list=[];
+    if(provider==='google'){
+      const base=url.replace(/\/+$/,'');
+      const res=await fetch(base+'/models?key='+encodeURIComponent(key));
+      if(!res.ok){
+        const errText = await res.text();
+        throw new Error(`HTTP ${res.status}\n\n${errText}`);
+      }
+      const data=await res.json();
+      list=(data.models||[]).map(m=>{
+        let id=m.name||m.id||'';
+        id=String(id).replace(/^models\//,'');
+        return {id};
+      }).filter(m=>/gemini/i.test(m.id) && !/embed/i.test(m.id));
+    } else {
+      const res=await fetch(url.replace(/\/+$/,'')+'/models',{headers:{'Authorization':'Bearer '+key}});
+      if(!res.ok){
+        const errText = await res.text();
+        let detail = errText;
+        try {
+          const errJson = JSON.parse(errText);
+          detail = errJson.error?.message || errJson.message || errText;
+        } catch(e){}
+        throw new Error(`HTTP ${res.status}\n\n${detail}`);
+      }
+      const data=await res.json();
+      list=data.data||data.models||[];
     }
-    const data=await res.json();
-    const list=data.data||data.models||[];
     const sel=document.getElementById('api-model');
     sel.innerHTML=list.map(m=>{const id=m.id||m.name||m;return`<option value="${escapeHTML(id)}">${escapeHTML(id)}</option>`;}).join('')||'<option value="">(空)</option>';
   } catch(err){alert('获取失败:\n'+err.message);}
@@ -3460,7 +3558,7 @@ function notifyNewMessage(text){
     navigator.serviceWorker.ready.then(reg=>{
       reg.showNotification(title, {
         body,
-        icon: '/favicon-32x32.png',
+        icon: 'favicon-32x32.png',
         badge: '/favicon-32x32.png',
         tag: 'loveboat-chat',
         renotify: true,
@@ -4045,6 +4143,7 @@ document.getElementById('chatMoreBack').addEventListener('click',(e)=>{
 
 
 let typingEl=null;
+let typingPending=0; // 还没发完的回复批次数：>0 时一直显示「正在输入」
 
 function renderChat() {
   const s = state.chatSettings;
@@ -4086,7 +4185,7 @@ function renderChat() {
   : '';
     const bubbleContent = m.isSticker
     ? `<img src="${escapeHTML(m.text)}" style="max-width:160px;max-height:160px;width:auto;height:auto;border-radius:12px;display:block;">`
-    : `${quoteHtml}${escapeHTML(m.text)}`;
+    : (m.isQuestionnaire ? renderQuestionnaireBubble(m) : `${quoteHtml}${escapeHTML(m.text)}`);
     const bubbleStyle = m.isSticker ? '' : `background:${cfg.color};border-radius:${cfg.radius}px;padding:${cfg.padding}px ${cfg.padding + 4}px;font-size:${cfg.fontSize}px;color:${textColor};border:1px solid rgba(255,255,255,0.18);`;
     html += `
       <div class="msg-wrap ${isMine ? 'mine' : 'theirs'}">
@@ -4120,6 +4219,8 @@ function renderChat() {
 
   typingEl = null;
   bindBubbleMenu();
+  // 回复还在路上时，重新渲染（返回 / 打开 More / 再次进入聊天等）不会把「正在输入」弄丢
+  if(typingPending > 0) showTyping();
 }
 
 
@@ -4189,6 +4290,8 @@ function maybeAddStamp(m){
 }
 
 document.getElementById('chatSend').addEventListener('click',sendMyMessage);
+const chatPollBtn=document.getElementById('chatPollBtn');
+if(chatPollBtn) chatPollBtn.addEventListener('click', openQuestionnaireComposer);
 chatInput.addEventListener('keydown',e=>{if(e.key==='Enter')sendMyMessage();});
 
 function sendMyMessage(){
@@ -4213,6 +4316,7 @@ function sendMyMessage(){
 document.getElementById('chatReply').addEventListener('click',triggerReply);
 
 function showTyping(){
+  if(typingEl && typingEl.parentNode) return; // 已经在显示，不重复添加
   const s=state.chatSettings;
   const avSrc=state.images.avatarTheirs;
   const avCls=avSrc?'has-img':'';
@@ -4296,7 +4400,7 @@ function triggerReply(){
   const count=Math.floor(Math.random()*(s.replyMax-s.replyMin+1))+s.replyMin;
   const delay=(s.replyDelay||20)*1000;
   state.chat.messages.forEach(m=>{if(m.from==='me')m.read=true;});
-  saveState(); renderChat(); showTyping();
+  saveState(); typingPending++; renderChat(); showTyping();
 
   // 决定本回合是否发表情包，以及插入位置
   const prob = Math.max(0, Math.min(100, s.emojiReplyProb ?? 30)) / 100;
@@ -4319,6 +4423,11 @@ function triggerReply(){
     else slotTimes.push(slotTimes[k - 1] + 1000 + Math.random() * 4000);
   }
   const scheduleAt = (idx) => slotTimes[idx];
+  // 每条回复送达前调用；这一批的最后一条送达后，「正在输入」才真正消失
+  const typingStep = (idx) => {
+    if(idx >= totalMsgs - 1) typingPending = Math.max(0, typingPending - 1);
+    hideTyping();
+  };
 
 
     // 随机决定引用挂到本轮哪一条消息上
@@ -4330,7 +4439,7 @@ function triggerReply(){
       const slotIdx = scheduled;
       scheduled++;
       setTimeout(()=>{
-        if(slotIdx===0) hideTyping();
+        typingStep(slotIdx);
         const pick = allStickers[Math.floor(Math.random()*allStickers.length)];
         const m = { from:'them', text: pick.src, time: Date.now(), isSticker: true };
         maybeAddStamp(m);
@@ -4344,7 +4453,7 @@ function triggerReply(){
     const myIdx = scheduled;
     scheduled++;
     setTimeout(()=>{
-      if(myIdx===0) hideTyping();
+      typingStep(myIdx);
       const pick=pool[Math.floor(Math.random()*pool.length)];
       const m = {from:'them', text:pick, time:Date.now()};
       // 随机挂到本轮某一条上
@@ -4366,7 +4475,7 @@ function triggerReply(){
     const slotIdx = scheduled;
     scheduled++;
     setTimeout(()=>{
-      if(slotIdx===0) hideTyping();
+      typingStep(slotIdx);
       const pick = allStickers[Math.floor(Math.random()*allStickers.length)];
       const m = { from:'them', text: pick.src, time: Date.now(), isSticker: true };
       maybeAddStamp(m);
@@ -4397,8 +4506,8 @@ function startProactiveLoop(){
   stopProactiveLoop();
   const pa = state.chatSettings.proactive;
   if(!pa || !pa.enabled) return;
-  // 每 5 分钟检查一次
-  proactiveTimer = setInterval(checkProactiveSend, 5*60*1000);
+  // 每 30 秒检查一次（最短间隔可能是分钟级）
+  proactiveTimer = setInterval(checkProactiveSend, 30*1000);
   // 启动时立刻检查一次
   setTimeout(checkProactiveSend, 3000);
 }
@@ -4407,26 +4516,35 @@ function stopProactiveLoop(){
   proactiveTimer = null;
 }
 
+function getProactiveMinMinutes(pa){
+  if(!pa) return 30;
+  if(pa.minMinutes != null && pa.minMinutes !== '') return Math.max(1, +pa.minMinutes);
+  if(pa.minHours != null) return Math.max(1, Math.round(+pa.minHours * 60));
+  return 30;
+}
+
 function checkProactiveSend(){
   const pa = state.chatSettings.proactive;
   if(!pa || !pa.enabled) return;
   if(isInQuietHours(pa.quietStart, pa.quietEnd)) return;
 
-  // 距离上一条消息的时间
+  const minMin = getProactiveMinMinutes(pa);
+  const maxMin = Math.max(minMin, (+pa.maxHours || 3) * 60);
+
+  // 距离上一条消息的时间（分钟）
   const msgs = state.chat.messages;
   const lastMsg = msgs[msgs.length-1];
   const lastTime = lastMsg ? lastMsg.time : 0;
-  const sinceLast = (Date.now() - lastTime) / 3600000; // 小时
+  const sinceLast = (Date.now() - lastTime) / 60000;
 
-  // 必须超过 minHours，且没有在最近 minHours 内主动触发过
-  const sinceTrigger = (Date.now() - (pa.lastTriggerAt||0)) / 3600000;
-  if(sinceLast < pa.minHours) return;
-  if(sinceTrigger < pa.minHours) return;
+  // 必须超过最短间隔，且没有在最近最短间隔内主动触发过
+  const sinceTrigger = (Date.now() - (pa.lastTriggerAt||0)) / 60000;
+  if(sinceLast < minMin) return;
+  if(sinceTrigger < minMin) return;
 
-  // 在 [minHours, maxHours] 区间内随机决定要不要触发
-  // 思路：超过 minHours 后，每次检查有一定概率触发，确保大致落在区间内
-  const range = Math.max(0.1, pa.maxHours - pa.minHours);
-  const overshoot = sinceLast - pa.minHours;
+  // 在 [最短分钟, 最长小时] 区间内随机决定要不要触发
+  const range = Math.max(1, maxMin - minMin);
+  const overshoot = sinceLast - minMin;
   const prob = Math.min(1, overshoot / range);
   if(Math.random() > prob) return;
 
@@ -4454,6 +4572,97 @@ function checkProactiveSend(){
   saveState();
 }
 
+
+/* ===== 问卷 ===== */
+let questionnaireTimer = null;
+
+function ensureQuestionnaireState(){
+  state.chatSettings.questionnaire = state.chatSettings.questionnaire || {minMinutes:1,maxMinutes:10,pending:null};
+  return state.chatSettings.questionnaire;
+}
+
+function openQuestionnaireComposer(){
+  const qs = ensureQuestionnaireState();
+  showModal(`
+    <h3>发送问卷</h3>
+    <p style="font-size:12px;opacity:.7;margin:6px 0 10px;">对方会在 ${qs.minMinutes}～${qs.maxMinutes} 分钟后选择其中一个选项回复你。</p>
+    <label style="display:block;margin-top:8px;font-size:13px;">问题</label>
+    <input type="text" id="q-question" placeholder="今天想吃什么？" style="width:100%;margin-top:4px;">
+    <label style="display:block;margin-top:10px;font-size:13px;">选项（每行一个，至少 2 个）</label>
+    <textarea id="q-options" rows="5" placeholder="火锅&#10;日料&#10;在家随便吃" style="width:100%;margin-top:4px;resize:vertical;"></textarea>
+    <div class="row-flex" style="margin-top:14px;gap:8px;">
+      <button id="q-cancel">取消</button>
+      <button id="q-ok">发送</button>
+    </div>
+  `);
+  document.getElementById('q-cancel').addEventListener('click', closeModal);
+  document.getElementById('q-ok').addEventListener('click', ()=>{
+    const question = (document.getElementById('q-question').value||'').trim();
+    const options = (document.getElementById('q-options').value||'').split(/\n/).map(x=>x.trim()).filter(Boolean);
+    if(!question){ showToast('请填写问题','info',2000); return; }
+    if(options.length<2){ showToast('至少写两个选项','info',2000); return; }
+    closeModal();
+    sendQuestionnaire(question, options);
+  });
+}
+
+function sendQuestionnaire(question, options){
+  const qs = ensureQuestionnaireState();
+  const minM = Math.max(1, +qs.minMinutes||1);
+  const maxM = Math.max(minM, +qs.maxMinutes||minM);
+  const waitMin = minM + Math.random()*(maxM-minM);
+  const waitMs = Math.round(waitMin*60*1000);
+  const id = 'q_'+Date.now();
+  const m = {
+    from:'me',
+    text: question,
+    time: Date.now(),
+    read:false,
+    isQuestionnaire:true,
+    questionnaire:{ id, question, options, chosen:null }
+  };
+  maybeAddStamp(m);
+  state.chat.messages.push(m);
+  qs.pending = { id, question, options, sentAt: Date.now(), dueAt: Date.now()+waitMs };
+  saveState();
+  renderChat();
+  showToast(`问卷已发送，对方约 ${Math.max(1,Math.round(waitMin))} 分钟后选择`,'info',2800);
+  scheduleQuestionnaireReply();
+}
+
+function scheduleQuestionnaireReply(){
+  if(questionnaireTimer){ clearTimeout(questionnaireTimer); questionnaireTimer=null; }
+  const qs = ensureQuestionnaireState();
+  const p = qs.pending;
+  if(!p || !p.dueAt) return;
+  const delay = Math.max(500, p.dueAt - Date.now());
+  questionnaireTimer = setTimeout(resolveQuestionnaireReply, delay);
+}
+
+function resolveQuestionnaireReply(){
+  const qs = ensureQuestionnaireState();
+  const p = qs.pending;
+  if(!p) return;
+  const pick = p.options[Math.floor(Math.random()*p.options.length)];
+  const src = state.chat.messages.find(m => m.isQuestionnaire && m.questionnaire && m.questionnaire.id===p.id);
+  if(src && src.questionnaire) src.questionnaire.chosen = pick;
+  const reply = { from:'them', text: pick, time: Date.now(), quote: '问卷：'+p.question, isQuestionnaireReply:true };
+  maybeAddStamp(reply);
+  state.chat.messages.push(reply);
+  qs.pending = null;
+  saveState();
+  if(document.getElementById('chatPage').classList.contains('active')) renderChat();
+  notifyNewMessage(pick);
+}
+
+function renderQuestionnaireBubble(m){
+  const q = m.questionnaire || {question:m.text, options:[], chosen:null};
+  const opts = (q.options||[]).map(opt=>{
+    const chosen = q.chosen && q.chosen===opt;
+    return `<div style="margin-top:6px;padding:7px 10px;border-radius:10px;font-size:13px;background:${chosen?'rgba(255,180,200,.35)':'rgba(255,255,255,.10)'};border:1px solid ${chosen?'rgba(255,180,200,.7)':'rgba(255,255,255,.18)'};">${escapeHTML(opt)}${chosen?'  ✓':''}</div>`;
+  }).join('');
+  return `<div style="font-size:12px;opacity:.75;margin-bottom:4px;">📋 问卷</div><div>${escapeHTML(q.question||m.text)}</div>${opts}`;
+}
 
 /* ===== Sticker Panel ===== */
 const emojiPanel = document.getElementById('emojiPanel');
@@ -4600,6 +4809,13 @@ document.getElementById('chatEmojiBtn').addEventListener('click', () => {
   if (opening) renderStickerPanel();
 });
 
+function fmtReplyDelay(v){
+  v=Math.round(+v||0);
+  if(v<60) return v+'秒';
+  const m=Math.floor(v/60), r=v%60;
+  return r?`${m}分${r}秒`:`${m}分钟`;
+}
+
 function renderChatMore(){
   const s=state.chatSettings;
   const cardFolders=Object.keys(state.cards['字卡']||{}).map(f=>'字卡/'+f);
@@ -4688,8 +4904,9 @@ function renderChatMore(){
       </div>
     </div>
     <div class="item">
-      <label class="inline-row"><span>回复速度</span><span class="val-badge" id="delayVal">${s.replyDelay}秒</span></label>
-      <input type="range" id="cm-delay" min="5" max="100" value="${s.replyDelay}">
+      <label class="inline-row"><span>回复速度</span><span class="val-badge" id="delayVal">${fmtReplyDelay(s.replyDelay)}</span></label>
+      <input type="range" id="cm-delay" min="5" max="300" step="1" value="${s.replyDelay}">
+      <div style="font-size:11px;opacity:.6;margin-top:4px;">最长 5 分钟。TA 回复前会一直显示「正在输入」，等待期间请不要关闭网页。</div>
     </div>
     <div class="item">
       <label>回复条数（随机范围）</label>
@@ -4745,14 +4962,14 @@ function renderChatMore(){
 <div class="item">
   <label>主动发消息</label>
   <p style="font-size:11px;opacity:.65;margin:4px 0 10px;line-height:1.6;">
-    开启后 TA 会在"距离上一次消息超过 N 小时"时主动发消息给你。<br>
+    开启后 TA 会在"距离上一次消息超过最短分钟、最长不超过若干小时"时主动发消息给你。<br>
     <span style="color:#ffd1d1;">⚠ 此功能必须保持网页在后台运行，关闭网页后会停止。</span>
   </p>
   <label class="inline-row"><span>启用</span>${toggleHTML('cm-proactive', s.proactive?.enabled)}</label>
   <div style="display:flex;align-items:center;gap:8px;margin-top:10px;">
     <span style="font-size:13px;">间隔</span>
-    <input type="number" id="cm-proactive-min" min="0.1" step="0.1" value="${s.proactive?.minHours ?? 1}" style="width:70px;text-align:center;">
-    <span style="font-size:13px;">~</span>
+    <input type="number" id="cm-proactive-min" min="1" step="1" value="${s.proactive?.minMinutes ?? Math.round((s.proactive?.minHours ?? 1)*60)}" style="width:70px;text-align:center;">
+    <span style="font-size:13px;">分钟 ~</span>
     <input type="number" id="cm-proactive-max" min="0.1" step="0.1" value="${s.proactive?.maxHours ?? 3}" style="width:70px;text-align:center;">
     <span style="font-size:13px;">小时随机</span>
   </div>
@@ -4770,6 +4987,21 @@ function renderChatMore(){
     <span style="font-size:13px;">条</span>
   </div>
 </div>
+
+    <div class="item">
+      <label>问卷</label>
+      <div style="font-size:12px;opacity:.65;line-height:1.6;margin-bottom:8px;">
+        你可以给对方发一份问卷，TA 会在设定的最短～最长分钟后随机选一个选项回复你。
+      </div>
+      <div class="inline-row" style="gap:8px;align-items:center;flex-wrap:wrap;">
+        <span style="font-size:13px;">回复等待</span>
+        <input type="number" id="cm-q-min" min="1" step="1" value="${s.questionnaire?.minMinutes ?? 1}" style="width:70px;text-align:center;">
+        <span style="font-size:13px;">~</span>
+        <input type="number" id="cm-q-max" min="1" step="1" value="${s.questionnaire?.maxMinutes ?? 10}" style="width:70px;text-align:center;">
+        <span style="font-size:13px;">分钟</span>
+      </div>
+      <button id="cm-q-send" style="margin-top:12px;">📋 发送问卷</button>
+    </div>
 
     <div class="item">
       <label>摸鱼记录</label>
@@ -4815,7 +5047,11 @@ function renderChatMore(){
   bind('cm-me-radius','radius',state.chatSettings.bubbleMe,'meR');
   bind('cm-me-padding','padding',state.chatSettings.bubbleMe,'meP');
   bind('cm-me-font','fontSize',state.chatSettings.bubbleMe,'meF');
-  bind('cm-delay','replyDelay',state.chatSettings,'delayVal','秒');
+  document.getElementById('cm-delay').addEventListener('input',e=>{
+    state.chatSettings.replyDelay=+e.target.value;
+    document.getElementById('delayVal').textContent=fmtReplyDelay(e.target.value);
+    saveState();
+  });
   const epEl = document.getElementById('cm-emoji-prob');
 if(epEl) epEl.addEventListener('input', e => {
   state.chatSettings.emojiReplyProb = +e.target.value;
@@ -4993,7 +5229,8 @@ if(epEl) epEl.addEventListener('input', e => {
     });
   });
   // 主动发消息
-const pa = state.chatSettings.proactive = state.chatSettings.proactive || {enabled:false,minHours:1,maxHours:3,quietStart:'23:00',quietEnd:'07:00',minMsgs:1,maxMsgs:2,lastTriggerAt:0};
+const pa = state.chatSettings.proactive = state.chatSettings.proactive || {enabled:false,minMinutes:30,maxHours:3,quietStart:'23:00',quietEnd:'07:00',minMsgs:1,maxMsgs:2,lastTriggerAt:0};
+if(pa.minMinutes == null && pa.minHours != null) pa.minMinutes = Math.max(1, Math.round(+pa.minHours * 60));
 bindToggle('cm-proactive', on=>{
   pa.enabled = on;
   saveState();
@@ -5008,13 +5245,20 @@ bindToggle('cm-proactive', on=>{
   const el=document.getElementById(id);
   if(!el) return;
   el.addEventListener('change',()=>{
-    if(id==='cm-proactive-min') pa.minHours=Math.max(0.1,+el.value);
-    if(id==='cm-proactive-max') pa.maxHours=Math.max(pa.minHours,+el.value);
+    if(id==='cm-proactive-min') pa.minMinutes=Math.max(1,+el.value|0);
+    if(id==='cm-proactive-max') pa.maxHours=Math.max(0.1,+el.value);
     if(id==='cm-proactive-mn')  pa.minMsgs=Math.max(1,+el.value|0);
     if(id==='cm-proactive-mx')  pa.maxMsgs=Math.max(pa.minMsgs,+el.value|0);
     saveState();
   });
 });
+const qs = state.chatSettings.questionnaire = state.chatSettings.questionnaire || {minMinutes:1,maxMinutes:10,pending:null};
+const qminEl=document.getElementById('cm-q-min');
+const qmaxEl=document.getElementById('cm-q-max');
+if(qminEl) qminEl.addEventListener('change',()=>{ qs.minMinutes=Math.max(1,+qminEl.value|0); if(qs.maxMinutes<qs.minMinutes) qs.maxMinutes=qs.minMinutes; saveState(); });
+if(qmaxEl) qmaxEl.addEventListener('change',()=>{ qs.maxMinutes=Math.max(qs.minMinutes,+qmaxEl.value|0); saveState(); });
+const qsendBtn=document.getElementById('cm-q-send');
+if(qsendBtn) qsendBtn.addEventListener('click', openQuestionnaireComposer);
 document.getElementById('cm-proactive-qs').addEventListener('change',e=>{pa.quietStart=e.target.value;saveState();});
 document.getElementById('cm-proactive-qe').addEventListener('change',e=>{pa.quietEnd=e.target.value;saveState();});
   // 允许引用
@@ -5477,7 +5721,35 @@ async function requestAdvice(){
 }
 
 async function callLLM(cfg,messages){
-  const res=await fetch(cfg.url.replace(/\/+$/,'')+'/chat/completions',{
+  const provider=detectApiProvider(cfg.url, cfg.provider);
+  const base=cfg.url.replace(/\/+$/,'');
+  if(provider==='google'){
+    const sysParts=[];
+    const contents=[];
+    (messages||[]).forEach(m=>{
+      if(m.role==='system') sysParts.push({text:m.content});
+      else contents.push({role: m.role==='assistant'?'model':'user', parts:[{text:m.content}]});
+    });
+    const body={
+      contents,
+      generationConfig:{temperature:cfg.temperature??0.8}
+    };
+    if(sysParts.length) body.systemInstruction={parts:sysParts};
+    const model=(cfg.model||'gemini-2.0-flash').replace(/^models\//,'');
+    const res=await fetch(base+'/models/'+encodeURIComponent(model)+':generateContent?key='+encodeURIComponent(cfg.key),{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(body)
+    });
+    if(!res.ok){
+      const errText = await res.text();
+      throw new Error(`HTTP ${res.status} - ${errText}`);
+    }
+    const d=await res.json();
+    const parts=d.candidates&&d.candidates[0]&&d.candidates[0].content&&d.candidates[0].content.parts||[];
+    return parts.map(p=>p.text||'').join('').trim();
+  }
+  const res=await fetch(base+'/chat/completions',{
     method:'POST',
     headers:{'Content-Type':'application/json','Authorization':'Bearer '+cfg.key},
     body:JSON.stringify({model:cfg.model,temperature:cfg.temperature??0.8,messages})
@@ -9473,6 +9745,7 @@ idbGet(DB_KEY).then(saved => {
     applyState();updateModeIcon();
     if(state.keepAlive) startKeepAlive();
     if(state.chatSettings.proactive && state.chatSettings.proactive.enabled) startProactiveLoop();
+    scheduleQuestionnaireReply();
     updatePlayIcon();
     // 用真实存档刷新桌面 widgets
     if(typeof renderAnnivWidget==='function') renderAnnivWidget();
