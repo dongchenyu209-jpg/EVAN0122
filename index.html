@@ -696,6 +696,29 @@ body.theme-pinkwhite .moyu-card, body.theme-pinkwhite .moyu-box, body.theme-pink
 body.theme-pinkwhite .moyu-box, body.theme-pinkwhite .moyu-rec, body.theme-pinkwhite .moyu-remain, body.theme-pinkwhite .moyu-pill { background:rgba(90,58,72,.06); }
 body.theme-pinkwhite .moyu-empty, body.theme-pinkwhite .moyu-hidden, body.theme-pinkwhite .moyu-stamp { border-color:rgba(90,58,72,.35); }
 
+/* ===== 摸鱼小记：手机屏幕适配 ===== */
+/* 第二页内容比屏幕高时（矮屏手机）可以上下滑动，摸鱼小记卡片不会被截掉；左右滑动翻页不受影响 */
+#homePage2 { overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
+#homePage2::-webkit-scrollbar { display:none; }
+body.phone-fit #fabExitFullscreen { display:none; }
+.p2-moyu-wrap { padding-bottom:10px; }
+@media (max-height:760px){
+  .moyu-card { min-height:64px; padding:10px 14px 8px; }
+  .moyu-title { margin-bottom:4px; }
+  .moyu-note { min-height:0; padding-top:2px; -webkit-line-clamp:1; }
+}
+.modal:has(.moyu-head) .modal-content { max-height:88vh; max-height:88dvh; }
+@media (max-width:480px){
+  .modal:has(.moyu-head) { padding:12px; }
+  .modal-content:has(.moyu-head) { padding:20px 16px; border-radius:20px; }
+  .moyu-head { margin-bottom:12px; }
+  .moyu-head h3 { font-size:22px; }
+  .moyu-tabs { gap:6px; }
+  .moyu-tabs button { padding:10px 4px !important; font-size:13px !important; white-space:nowrap; }
+  .moyu-box { padding:12px; }
+  .moyu-rec { padding:8px 10px; }
+}
+
 * { scrollbar-width:none; -ms-overflow-style:none; }
 *::-webkit-scrollbar { display:none; }
 /* ===== Floating Ball ===== */
@@ -2229,7 +2252,22 @@ function defaultState(){
 
     chat: { messages: [], lastStampTime: 0 },
     chatSettings: {
-  // ... 原有字段保持不变
+  // 聊天基础设置（全新存档也必须有这些字段，否则发消息 / 打开 More 会报错）
+  themNickname: '',
+  avatarSize: 36,
+  bubbleThem: { color: 'rgba(255,255,255,.16)', textColor: '#ffffff', radius: 18, padding: 10, fontSize: 14 },
+  bubbleMe:   { color: 'rgba(255,220,230,.85)', textColor: '#000000', radius: 18, padding: 10, fontSize: 14 },
+  replyFolders: ['字卡/Default'],
+  replyDelay: 30,
+  replyMin: 1,
+  replyMax: 3,
+  emojiReplyProb: 30,
+  replyMode: 'manual',
+  allowQuote: true,
+  allowIgnore: false,
+  ignoreProb: 0.2,
+  customBubbleCSS: '',
+  customBubblePresets: [],
   showBubbleTime: true, 
   proactive: {
     enabled: false,
@@ -2391,6 +2429,20 @@ function saveState(){
 
 const state = loadState();
 
+/* ========== 手机屏幕适配：窄屏 / 矮触屏直接铺满，不再显示 390×844 的手机框 ========== */
+function isPhoneViewport(){
+  const coarse = !!(window.matchMedia && window.matchMedia('(pointer:coarse)').matches);
+  return window.innerWidth <= 480 || (coarse && window.innerWidth <= 900 && window.innerHeight < 844);
+}
+function syncFullscreenClass(){
+  const phone = isPhoneViewport();
+  document.body.classList.toggle('fullscreen', !!state.fullscreen || phone);
+  document.body.classList.toggle('phone-fit', phone);
+}
+syncFullscreenClass();
+window.addEventListener('resize', syncFullscreenClass);
+window.addEventListener('orientationchange', ()=>setTimeout(syncFullscreenClass,200));
+
 
 /* ========== CLOCK ========== */
 const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -2540,8 +2592,8 @@ function applyState(){
   }
 
   if(_lastApplied.fullscreen !== state.fullscreen){
-    document.body.classList.toggle('fullscreen',!!state.fullscreen);
     _lastApplied.fullscreen = state.fullscreen;
+    syncFullscreenClass();
   }
 
   if(_lastApplied.fontColor !== state.fontColor){
@@ -3219,6 +3271,7 @@ function buildScreenHTML(){
 
         <div class="item">
         <label class="inline-row"><span>全屏模式</span>${toggleHTML('scr-full',state.fullscreen)}</label>
+        <div style="font-size:11px;opacity:.6;margin-top:6px;">手机等窄屏会自动铺满屏幕，这个开关只影响电脑上的显示。</div>
        </div>
   `;
 }
